@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/bjl13/open-cognition/schemas/policy.schema.json",
+  "title": "Policy",
+  "description": "A governance rule applied by the control plane. Policies are themselves canonical objects (object_type: 'policy') and are therefore immutable and content-addressed.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "policy_type",
+    "name",
+    "active",
+    "rules",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "0.1.0",
+      "description": "Schema version. Must be '0.1.0' for this version of the spec."
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this policy. UUID v4."
+    },
+    "policy_type": {
+      "type": "string",
+      "enum": ["access", "retention", "validation", "lifecycle"],
+      "description": "Category of governance this policy enforces."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short, human-readable policy name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable explanation of what this policy does and why."
+    },
+    "active": {
+      "type": "boolean",
+      "description": "Whether this policy is currently enforced by the control plane."
+    },
+    "applies_to": {
+      "type": "object",
+      "description": "Scope of objects or agents this policy governs. Omit to apply globally.",
+      "additionalProperties": false,
+      "properties": {
+        "object_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["observation", "document", "tool_output", "policy"]
+          },
+          "description": "Object types this policy applies to."
+        },
+        "agent_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Specific agent IDs this policy applies to."
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered list of rules enforced by this policy. Rules are evaluated in order; first match wins.",
+      "items": {
+        "type": "object",
+        "required": ["rule_id", "action", "condition"],
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Short identifier for this rule within the policy (e.g. 'no-overwrite', 'require-context')."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["allow", "deny", "require", "expire"],
+            "description": "What the control plane does when this rule matches."
+          },
+          "condition": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable condition that triggers this rule. Formal expression language is TBD."
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Optional parameters for the rule action (e.g. retention duration for 'expire').",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of when this policy was created."
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the human or agent who created this policy."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional free-form context.",
+      "additionalProperties": true
+    }
+  }
+}
