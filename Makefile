@@ -1,4 +1,4 @@
-.PHONY: up down logs fmt test validate lint
+.PHONY: up down logs fmt test validate migrate lint
 
 up:
 	docker compose up -d
@@ -31,6 +31,9 @@ fmt:
 	else \
 		echo "gofmt not found; skipping"; \
 	fi
+
+migrate:
+	docker compose exec -T postgres psql -U cognition -d cognition -f /dev/stdin < migrations/001_initial.sql
 
 validate:
 	python3 scripts/validate_schemas.py
