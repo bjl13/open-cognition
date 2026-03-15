@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.1.0",
+  "id": "sha256:90646afb83b3fb4dcd60fe6476047f152f443b8bcb70bce537f50c4b0105c20c",
+  "object_type": "observation",
+  "content_type": "application/json",
+  "size_bytes": 133,
+  "created_at": "2024-03-15T14:30:00Z",
+  "created_by": "agent:sensor-collector-v1",
+  "storage_path": "canonical/observation/2024/03/15/sha256:90646afb83b3fb4dcd60fe6476047f152f443b8bcb70bce537f50c4b0105c20c.json",
+  "metadata": {
+    "source_node": "lab-node-7",
+    "collection_run": "run-2024-03-15-001"
+  }
+}

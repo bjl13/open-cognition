@@ -1,4 +1,4 @@
-.PHONY: up down logs fmt test lint
+.PHONY: up down logs fmt test validate lint
 
 up:
 	docker compose up -d
@@ -32,9 +32,10 @@ fmt:
 		echo "gofmt not found; skipping"; \
 	fi
 
-test:
-	@echo "No tests yet."
-	@exit 0
+validate:
+	python3 scripts/validate_schemas.py
+
+test: validate
 
 lint:
 	@echo "No linter configured yet."

@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/bjl13/open-cognition/schemas/agent_reference.schema.json",
+  "title": "AgentReference",
+  "description": "An agent-scoped pointer to a canonical object. The meaning layer. Agents do not own objects — they own their interpretation.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "canonical_object_id",
+    "agent_id",
+    "created_at",
+    "context"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "0.1.0",
+      "description": "Schema version. Must be '0.1.0' for this version of the spec."
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this reference. UUID v4."
+    },
+    "canonical_object_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "ID of the canonical object being referenced. Must exist in the ledger."
+    },
+    "agent_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the agent creating this reference. Used for attribution."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of when this reference was created."
+    },
+    "context": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Why this agent is referencing this object. Human-readable rationale. Required — references without context are not attributable."
+    },
+    "relevance": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Agent's estimate of how relevant this object is to the current task. 0.0 = not relevant, 1.0 = directly relevant."
+    },
+    "trust_weight": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Agent's trust weighting for this object's content. 0.0 = untrusted, 1.0 = fully trusted."
+    },
+    "time_horizon": {
+      "type": "string",
+      "description": "ISO 8601 duration (e.g. 'P7D') or datetime indicating how long this reference remains valid. Omit if indefinite."
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64-encoded agent signature over the canonical reference payload (id + canonical_object_id + agent_id + created_at). Advisory in v0; enforced in Phase 7."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional free-form context.",
+      "additionalProperties": true
+    }
+  }
+}

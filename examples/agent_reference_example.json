@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.1.0",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "canonical_object_id": "sha256:90646afb83b3fb4dcd60fe6476047f152f443b8bcb70bce537f50c4b0105c20c",
+  "agent_id": "agent:analysis-agent-v1",
+  "created_at": "2024-03-15T14:35:22Z",
+  "context": "Temperature reading is within normal operating range. Flagging for inclusion in daily environment summary.",
+  "relevance": 0.85,
+  "trust_weight": 0.9,
+  "time_horizon": "P7D",
+  "metadata": {
+    "task": "daily-environment-summary",
+    "run_id": "run-2024-03-15-002"
+  }
+}
