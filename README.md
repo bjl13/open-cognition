@@ -122,7 +122,7 @@ Prerequisites:
 Run:
 
 ```bash
-git clone https://github.com/<org>/open-cognition
+git clone https://github.com/bjl13/open-cognition
 cd open-cognition
 make up
 ```
@@ -175,8 +175,6 @@ Open-Cognition enforces three separations:
 - Attribution over aggregate “system” behavior  
 - Portability across storage providers  
 - Minimal runtime dependencies  
-
-Boring systems survive.
 
 ---
 
