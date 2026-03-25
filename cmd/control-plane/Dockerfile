@@ -1,11 +1,13 @@
 # --- build stage ---
-FROM golang:1.22-alpine AS builder
+# NOTE: Once pgx replaces internal/pg, bump this to golang:1.25-alpine and
+# remove POSTGRES_HOST_AUTH_METHOD=md5 from docker-compose.yml.
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
 # Cache module downloads before copying source.
-COPY go.mod go.sum ./
-RUN go mod download
+COPY go.mod ./
+RUN go mod download 2>/dev/null || true
 
 COPY . .
 

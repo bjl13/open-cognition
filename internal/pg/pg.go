@@ -1,12 +1,26 @@
 // Package pg provides a minimal PostgreSQL wire-protocol v3 client.
 //
-// Design constraints:
-//   - Zero external dependencies (stdlib only)
-//   - Supports: cleartext + MD5 authentication, simple query protocol
-//   - Not production-hardened; suited for the reference implementation
+// # Temporary implementation
 //
-// The server must be configured for MD5 or trust authentication.
-// SCRAM-SHA-256 is not supported in this minimal implementation.
+// This package exists only because pgx/v5 >= v5.9 requires Go 1.25, which was
+// unavailable in the offline Go 1.24 environment where Phase 3 was authored.
+//
+// Migration path (requires network + Go 1.25):
+//
+//  1. go get github.com/jackc/pgx/v5@latest
+//  2. Rewrite internal/db/db.go to use pgxpool and $N-parameterized queries.
+//  3. Delete this package (internal/pg/).
+//  4. Remove POSTGRES_HOST_AUTH_METHOD=md5 from docker-compose.yml.
+//  5. In cmd/control-plane/Dockerfile, change golang:1.24-alpine → golang:1.25-alpine.
+//
+// # Current constraints
+//
+//   - Zero external dependencies (stdlib only)
+//   - Supports cleartext + MD5 authentication only (no SCRAM-SHA-256)
+//   - Simple query protocol; no prepared statements / parameterized queries
+//   - SQL injection prevented by QuoteLiteral (standard_conforming_strings=on since PG 9.1)
+//
+// The Postgres server must be configured with POSTGRES_HOST_AUTH_METHOD=md5.
 package pg
 
 import (
