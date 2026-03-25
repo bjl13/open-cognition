@@ -1,4 +1,4 @@
-.PHONY: up down logs fmt test validate migrate lint
+.PHONY: up down logs build fmt test validate migrate lint
 
 up:
 	docker compose up -d
@@ -31,6 +31,9 @@ fmt:
 	else \
 		echo "gofmt not found; skipping"; \
 	fi
+
+build:
+	go build ./cmd/control-plane
 
 migrate:
 	docker compose exec -T postgres psql -U cognition -d cognition -f /dev/stdin < migrations/001_initial.sql

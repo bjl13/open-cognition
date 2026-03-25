@@ -5,6 +5,7 @@ services:
       POSTGRES_USER: cognition
       POSTGRES_PASSWORD: cognition
       POSTGRES_DB: cognition
+      POSTGRES_HOST_AUTH_METHOD: md5
     volumes:
       - pg_data:/var/lib/postgresql/data
     ports:
@@ -35,6 +36,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: cmd/control-plane/Dockerfile
+    environment:
+      DATABASE_URL: postgres://cognition:cognition@postgres:5432/cognition?sslmode=disable
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cognition
+    restart: unless-stopped
 
 volumes:
   pg_data:
