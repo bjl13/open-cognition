@@ -19,7 +19,6 @@ func main() {
 	dbDSN := env("DATABASE_URL", "postgres://cognition:cognition@localhost:5432/cognition?sslmode=disable")
 	port := env("PORT", "8080")
 
-	dashboardDir := env("DASHBOARD_DIR", "dashboard/static")
 	storeCfg := storage.Config{
 		Endpoint:        env("STORAGE_ENDPOINT", "http://localhost:9000"),
 		Bucket:          env("STORAGE_BUCKET", "cognition"),
@@ -55,7 +54,7 @@ func main() {
 
 	// HTTP server
 	mux := http.NewServeMux()
-	api.NewHandler(database, store, dashboardDir).RegisterRoutes(mux)
+	api.NewHandler(database, store).RegisterRoutes(mux)
 
 	srv := &http.Server{
 		Addr:         ":" + port,

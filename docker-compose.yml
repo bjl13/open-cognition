@@ -60,25 +60,6 @@ services:
       - cognition
     restart: unless-stopped
 
-  observer:
-    build:
-      context: agents/observer
-      dockerfile: Dockerfile
-    environment:
-      CONTROL_PLANE: http://control-plane:8080
-      AGENT_ID: agent:observer:docker
-      # OBSERVE_TARGET: leave unset to collect environment snapshots.
-      # Override to a URL or file path to observe a specific target.
-      # OBSERVE_TARGET: https://example.com
-      POLL_INTERVAL: "60"
-      # AGENT_PRIVATE_KEY: base64-encoded 32-byte Ed25519 seed. Generated if absent.
-    depends_on:
-      control-plane:
-        condition: service_started
-    networks:
-      - cognition
-    restart: unless-stopped
-
 volumes:
   pg_data:
   minio_data:
