@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "strict": true,
+    "outDir": "static",
+    "rootDir": "src",
+    "noEmitOnError": true,
+    "removeComments": true
+  },
+  "include": ["src/**/*"]
+}
