@@ -44,10 +44,17 @@ services:
     environment:
       DATABASE_URL: postgres://cognition:cognition@postgres:5432/cognition?sslmode=disable
       PORT: "8080"
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_BUCKET: cognition
+      STORAGE_ACCESS_KEY_ID: minioadmin
+      STORAGE_SECRET_ACCESS_KEY: minioadmin
+      STORAGE_REGION: us-east-1
     ports:
       - "8080:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - cognition

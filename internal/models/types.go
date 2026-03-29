@@ -21,6 +21,22 @@ type CanonicalObject struct {
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// CreateCanonicalRequest is the wire format for POST /canonical.
+// It extends CanonicalObject with a Payload field that carries the raw bytes
+// to be content-addressed and stored.
+//
+// Payload is serialised as base64 by encoding/json ([]byte convention).
+// The control plane verifies sha256(Payload) == ID and len(Payload) == SizeBytes
+// before writing anything to storage or the ledger.
+//
+// Payload is not persisted in Postgres; it goes to object storage only.
+// The canonical_object.schema.json definition remains unchanged — Payload is
+// an upload-time envelope field.
+type CreateCanonicalRequest struct {
+	CanonicalObject
+	Payload []byte `json:"payload"` // required; base64-encoded raw bytes
+}
+
 // AgentReference is the meaning layer: an agent-scoped pointer to a
 // canonical object. All fields mirror agent_reference.schema.json.
 type AgentReference struct {

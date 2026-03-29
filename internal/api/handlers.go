@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,12 +10,14 @@ import (
 
 	"github.com/bjl13/open-cognition/internal/db"
 	"github.com/bjl13/open-cognition/internal/models"
+	"github.com/bjl13/open-cognition/internal/storage"
 )
 
 var (
-	sha256RE      = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	sha256RE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	// storage_path must match canonical/{object_type}/{yyyy}/{mm}/{dd}/{id}.json
 	storagePathRE = regexp.MustCompile(`^canonical/[a-z_]+/[0-9]{4}/[0-9]{2}/[0-9]{2}/sha256:[0-9a-f]{64}\.json$`)
-	// UUID v4: variant bits 10xx, version bits 0100
+	// UUID v4: variant 10xx, version 0100
 	uuidV4RE = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 	validObjectTypes = map[string]bool{
@@ -27,12 +30,13 @@ var (
 
 // Handler holds shared dependencies for all HTTP handlers.
 type Handler struct {
-	db *db.DB
+	db      *db.DB
+	storage *storage.Client
 }
 
 // NewHandler constructs a Handler.
-func NewHandler(database *db.DB) *Handler {
-	return &Handler{db: database}
+func NewHandler(database *db.DB, store *storage.Client) *Handler {
+	return &Handler{db: database, storage: store}
 }
 
 // RegisterRoutes registers all five control-plane endpoints on mux.
@@ -46,7 +50,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Response helpers
 // ---------------------------------------------------------------------------
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -59,7 +63,7 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// actorFromRequest reads the actor identity from the X-Actor header.
+// actorFromRequest reads the actor identity from the X-Actor request header.
 // Falls back to "human:unknown" — a valid but unverified identity.
 func actorFromRequest(r *http.Request) string {
 	if a := r.Header.Get("X-Actor"); a != "" {
@@ -69,6 +73,7 @@ func actorFromRequest(r *http.Request) string {
 }
 
 // guardStopped returns true (and writes a 503) when the system is STOPPED.
+// All write endpoints call this before doing any work.
 func (h *Handler) guardStopped(w http.ResponseWriter, r *http.Request) bool {
 	state, err := h.db.GetSystemState(r.Context())
 	if err != nil {
@@ -130,41 +135,126 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 // POST /canonical
 // ---------------------------------------------------------------------------
+//
+// Full Phase 4 flow:
+//  1. Reject if STOPPED.
+//  2. Decode CreateCanonicalRequest (CanonicalObject + base64 Payload).
+//  3. Validate all CanonicalObject fields.
+//  4. Validate Payload is non-empty.
+//  5. Verify sha256(Payload) matches the id field.
+//  6. Verify len(Payload) matches size_bytes.
+//  7. Verify storage_path is the canonical deterministic path for this object.
+//  8. Check ledger: reject 409 if this id already exists (immutability).
+//  9. Check storage: reject 409 if this path already exists (belt-and-braces).
+// 10. Upload Payload to storage at storage_path.
+// 11. Insert metadata record into Postgres.
+// 12. Write audit log entry.
+// 13. Return the CanonicalObject (without the payload field).
 
 func (h *Handler) createCanonical(w http.ResponseWriter, r *http.Request) {
 	if h.guardStopped(w, r) {
 		return
 	}
 
-	var obj models.CanonicalObject
-	if err := json.NewDecoder(r.Body).Decode(&obj); err != nil {
+	var req models.CreateCanonicalRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if err := validateCanonicalObject(&obj); err != nil {
+
+	if err := validateCanonicalObject(&req.CanonicalObject); err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
-	// Canonical objects are immutable — reject duplicate IDs.
-	exists, err := h.db.CanonicalObjectExists(r.Context(), obj.ID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to check for existing object")
+	// --- Payload validation ---
+
+	if len(req.Payload) == 0 {
+		writeError(w, http.StatusUnprocessableEntity, "payload is required")
 		return
 	}
-	if exists {
+
+	// Verify content hash.
+	digest := sha256.Sum256(req.Payload)
+	computed := fmt.Sprintf("sha256:%x", digest)
+	if computed != req.ID {
+		writeError(w, http.StatusUnprocessableEntity,
+			fmt.Sprintf("payload hash mismatch: id is %s but sha256(payload) is %s", req.ID, computed))
+		return
+	}
+
+	// Verify declared size.
+	if len(req.Payload) != req.SizeBytes {
+		writeError(w, http.StatusUnprocessableEntity,
+			fmt.Sprintf("size_bytes mismatch: declared %d but payload is %d bytes", req.SizeBytes, len(req.Payload)))
+		return
+	}
+
+	// Verify storage_path is the deterministic path for this object.
+	createdAt, _ := time.Parse(time.RFC3339, req.CreatedAt) // already validated above
+	expectedPath := fmt.Sprintf("canonical/%s/%s/%s.json",
+		req.ObjectType,
+		createdAt.UTC().Format("2006/01/02"),
+		req.ID,
+	)
+	if req.StoragePath != expectedPath {
+		writeError(w, http.StatusUnprocessableEntity,
+			fmt.Sprintf("storage_path must be %q", expectedPath))
+		return
+	}
+
+	// --- Immutability checks ---
+
+	// Ledger check (fast path — in-cluster).
+	ledgerExists, err := h.db.CanonicalObjectExists(r.Context(), req.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to check ledger")
+		return
+	}
+	if ledgerExists {
 		writeError(w, http.StatusConflict, "canonical object with this id already exists")
 		return
 	}
 
-	if err := h.db.InsertCanonicalObject(r.Context(), &obj); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to insert canonical object")
+	// Storage check (belt-and-braces — catches any orphaned objects from a
+	// previous failed transaction where storage succeeded but DB did not).
+	storageExists, err := h.storage.ObjectExists(r.Context(), req.StoragePath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to check object storage")
 		return
 	}
-	_ = h.db.WriteAuditLog(r.Context(), obj.CreatedBy, "create_canonical", obj.ID, "canonical_object",
-		map[string]interface{}{"object_type": obj.ObjectType})
+	if storageExists {
+		writeError(w, http.StatusConflict,
+			"object already exists in storage (orphaned write?); inspect and reconcile manually")
+		return
+	}
 
-	writeJSON(w, http.StatusCreated, obj)
+	// --- Write ---
+
+	// Storage first: if this succeeds and the DB write fails, the orphan is
+	// detectable via the storage check above on the next attempt. A background
+	// reconciliation process can clean these up in a future phase.
+	if err := h.storage.PutObject(r.Context(), req.StoragePath, req.Payload, req.ContentType); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to write to object storage: "+err.Error())
+		return
+	}
+
+	if err := h.db.InsertCanonicalObject(r.Context(), &req.CanonicalObject); err != nil {
+		// The object is now in storage but not in the ledger. Log loudly.
+		// A reconciliation process can re-drive the DB insert from storage.
+		writeError(w, http.StatusInternalServerError,
+			"payload stored but ledger insert failed — object may need reconciliation: "+err.Error())
+		return
+	}
+
+	_ = h.db.WriteAuditLog(r.Context(), req.CreatedBy, "create_canonical", req.ID, "canonical_object",
+		map[string]interface{}{
+			"object_type":  req.ObjectType,
+			"size_bytes":   req.SizeBytes,
+			"storage_path": req.StoragePath,
+		})
+
+	writeJSON(w, http.StatusCreated, req.CanonicalObject)
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +276,7 @@ func (h *Handler) createReference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Referential integrity: the target canonical object must exist.
+	// Referential integrity: the target canonical object must be in the ledger.
 	exists, err := h.db.CanonicalObjectExists(r.Context(), ref.CanonicalObjectID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to check canonical object")
@@ -202,6 +292,7 @@ func (h *Handler) createReference(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to insert agent reference")
 		return
 	}
+
 	_ = h.db.WriteAuditLog(r.Context(), ref.AgentID, "create_reference", ref.ID, "agent_reference",
 		map[string]interface{}{"canonical_object_id": ref.CanonicalObjectID})
 
