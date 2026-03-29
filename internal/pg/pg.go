@@ -433,14 +433,19 @@ func FormatJSONOrNULL(b []byte) string {
 // Connection pool
 // ---------------------------------------------------------------------------
 
-// Pool is a simple fixed-size connection pool.
+// Pool is a bounded connection pool.
+//
+// The channel always holds exactly maxConns tokens: a live *conn (idle) or nil
+// (available slot for a future connection). acquire blocks until a token is
+// available, which caps total concurrent Postgres connections at maxConns.
 type Pool struct {
 	cfg   config
 	conns chan *conn
-	mu    sync.Mutex
+	once  sync.Once
 }
 
-// NewPool creates a pool and verifies connectivity with one initial connection.
+// NewPool creates a pool, pre-fills it with maxConns nil tokens, and validates
+// connectivity by opening (and immediately returning) one real connection.
 func NewPool(ctx context.Context, dsn string, maxConns int) (*Pool, error) {
 	cfg, err := parseDSN(dsn)
 	if err != nil {
@@ -453,41 +458,79 @@ func NewPool(ctx context.Context, dsn string, maxConns int) (*Pool, error) {
 		cfg:   cfg,
 		conns: make(chan *conn, maxConns),
 	}
-	// Validate connectivity.
+	// Pre-fill with nil tokens. acquire blocks when all tokens are out,
+	// preventing unbounded connection growth under concurrent load.
+	for i := 0; i < maxConns; i++ {
+		p.conns <- nil
+	}
+	// Warm one real connection to validate connectivity.
 	c, err := dial(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	p.conns <- c
+	<-p.conns    // consume one nil token
+	p.conns <- c // replace it with the live connection
 	return p, nil
 }
 
+// acquire blocks until a connection slot is available, then returns a live
+// connection. A nil token causes a fresh dial. Returns an error if the pool
+// is closed or the context is cancelled.
 func (p *Pool) acquire(ctx context.Context) (*conn, error) {
 	select {
-	case c := <-p.conns:
-		return c, nil
-	default:
-		return dial(ctx, p.cfg)
+	case c, ok := <-p.conns:
+		if !ok {
+			return nil, fmt.Errorf("pg: pool is closed")
+		}
+		if c != nil {
+			return c, nil // reuse idle connection
+		}
+		// Empty slot: dial a new connection.
+		nc, err := dial(ctx, p.cfg)
+		if err != nil {
+			p.returnSlot(nil) // give the slot back before propagating the error
+			return nil, err
+		}
+		return nc, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
+// release returns a healthy connection to the pool.
+// If the pool was closed concurrently, the connection is discarded gracefully.
 func (p *Pool) release(c *conn) {
-	select {
-	case p.conns <- c:
-	default:
-		c.close() // pool full — discard
-	}
+	defer func() {
+		if recover() != nil {
+			c.close() // send on closed channel: pool was shut down
+		}
+	}()
+	p.conns <- c
+}
+
+// discard closes a broken connection and returns a nil slot to the pool so
+// future callers can dial a fresh connection.
+func (p *Pool) discard(c *conn) {
+	c.close()
+	p.returnSlot(nil)
+}
+
+// returnSlot puts a token (nil or a connection) back into the pool.
+// Silently drops it if the pool is already closed.
+func (p *Pool) returnSlot(c *conn) {
+	defer func() { recover() }() // ignore send on closed channel
+	p.conns <- c
 }
 
 // Exec acquires a connection, runs sql (no result), and returns it to the pool.
-// On error the connection is discarded.
+// On error the connection is discarded and its slot is returned.
 func (p *Pool) Exec(ctx context.Context, sql string) error {
 	c, err := p.acquire(ctx)
 	if err != nil {
 		return err
 	}
 	if err := c.exec(ctx, sql); err != nil {
-		c.close()
+		p.discard(c)
 		return err
 	}
 	p.release(c)
@@ -502,7 +545,7 @@ func (p *Pool) Query(ctx context.Context, sql string) (rows, error) {
 	}
 	r, err := c.query(ctx, sql)
 	if err != nil {
-		c.close()
+		p.discard(c)
 		return nil, err
 	}
 	p.release(c)
@@ -522,10 +565,14 @@ func (p *Pool) QueryRow(ctx context.Context, sql string, dest ...interface{}) er
 	return scanRow(r[0], dest...)
 }
 
-// Close terminates all idle connections.
+// Close terminates all idle connections. Safe to call more than once.
 func (p *Pool) Close() {
-	close(p.conns)
-	for c := range p.conns {
-		c.close()
-	}
+	p.once.Do(func() {
+		close(p.conns)
+		for c := range p.conns {
+			if c != nil {
+				c.close()
+			}
+		}
+	})
 }
