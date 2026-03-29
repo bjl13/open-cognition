@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bjl13/open-cognition/internal/models"
@@ -180,6 +181,151 @@ func (d *DB) WriteAuditLog(ctx context.Context, actor, action, targetID, targetT
 		return fmt.Errorf("db: write audit log: %w", err)
 	}
 	return nil
+}
+
+// ListCanonicalObjects returns up to limit canonical objects ordered newest first.
+func (d *DB) ListCanonicalObjects(ctx context.Context, limit, offset int) ([]models.CanonicalObject, error) {
+	sql := fmt.Sprintf(
+		`SELECT id, object_type, content_type, size_bytes, created_by, created_at, storage_path,
+		        COALESCE(metadata::text, '')
+		 FROM canonical_objects ORDER BY created_at DESC LIMIT %d OFFSET %d`,
+		limit, offset,
+	)
+	rows, err := d.pool.Query(ctx, sql)
+	if err != nil {
+		return nil, fmt.Errorf("db: list canonical objects: %w", err)
+	}
+	out := make([]models.CanonicalObject, 0, len(rows))
+	for _, row := range rows {
+		if len(row) < 8 {
+			continue
+		}
+		size, _ := strconv.Atoi(row[3])
+		obj := models.CanonicalObject{
+			SchemaVersion: "0.1.0",
+			ID:            row[0],
+			ObjectType:    row[1],
+			ContentType:   row[2],
+			SizeBytes:     size,
+			CreatedBy:     row[4],
+			CreatedAt:     parseTimestamp(row[5]),
+			StoragePath:   row[6],
+		}
+		if row[7] != "" {
+			var meta map[string]interface{}
+			if json.Unmarshal([]byte(row[7]), &meta) == nil {
+				obj.Metadata = meta
+			}
+		}
+		out = append(out, obj)
+	}
+	return out, nil
+}
+
+// ListAgentReferences returns up to limit agent references ordered newest first.
+func (d *DB) ListAgentReferences(ctx context.Context, limit, offset int) ([]models.AgentReference, error) {
+	sql := fmt.Sprintf(
+		`SELECT id, canonical_object_id, agent_id, created_at, context,
+		        COALESCE(relevance::text, ''), COALESCE(trust_weight::text, ''),
+		        COALESCE(time_horizon, ''), COALESCE(signature, ''),
+		        COALESCE(metadata::text, '')
+		 FROM agent_references ORDER BY created_at DESC LIMIT %d OFFSET %d`,
+		limit, offset,
+	)
+	rows, err := d.pool.Query(ctx, sql)
+	if err != nil {
+		return nil, fmt.Errorf("db: list agent references: %w", err)
+	}
+	out := make([]models.AgentReference, 0, len(rows))
+	for _, row := range rows {
+		if len(row) < 10 {
+			continue
+		}
+		ref := models.AgentReference{
+			SchemaVersion:     "0.1.0",
+			ID:                row[0],
+			CanonicalObjectID: row[1],
+			AgentID:           row[2],
+			CreatedAt:         parseTimestamp(row[3]),
+			Context:           row[4],
+			TimeHorizon:       row[7],
+			Signature:         row[8],
+		}
+		if row[5] != "" {
+			if f, err := strconv.ParseFloat(row[5], 64); err == nil {
+				ref.Relevance = &f
+			}
+		}
+		if row[6] != "" {
+			if f, err := strconv.ParseFloat(row[6], 64); err == nil {
+				ref.TrustWeight = &f
+			}
+		}
+		if row[9] != "" {
+			var meta map[string]interface{}
+			if json.Unmarshal([]byte(row[9]), &meta) == nil {
+				ref.Metadata = meta
+			}
+		}
+		out = append(out, ref)
+	}
+	return out, nil
+}
+
+// ListAuditLog returns up to limit audit entries ordered newest first.
+func (d *DB) ListAuditLog(ctx context.Context, limit int) ([]models.AuditEntry, error) {
+	sql := fmt.Sprintf(
+		`SELECT id, occurred_at, actor, action,
+		        COALESCE(target_id, ''), COALESCE(target_type, ''),
+		        COALESCE(detail::text, '')
+		 FROM audit_log ORDER BY occurred_at DESC LIMIT %d`,
+		limit,
+	)
+	rows, err := d.pool.Query(ctx, sql)
+	if err != nil {
+		return nil, fmt.Errorf("db: list audit log: %w", err)
+	}
+	out := make([]models.AuditEntry, 0, len(rows))
+	for _, row := range rows {
+		if len(row) < 7 {
+			continue
+		}
+		id, _ := strconv.ParseInt(row[0], 10, 64)
+		entry := models.AuditEntry{
+			ID:         id,
+			OccurredAt: parseTimestamp(row[1]),
+			Actor:      row[2],
+			Action:     row[3],
+			TargetID:   row[4],
+			TargetType: row[5],
+		}
+		if row[6] != "" {
+			var detail map[string]interface{}
+			if json.Unmarshal([]byte(row[6]), &detail) == nil {
+				entry.Detail = detail
+			}
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+// parseTimestamp converts a PostgreSQL TIMESTAMPTZ text value to RFC3339.
+// Mirrors the format list in internal/pg's scanValue.
+func parseTimestamp(s string) string {
+	for _, layout := range []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05.999999999+00",
+		"2006-01-02 15:04:05+00",
+	} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC().Format(time.RFC3339)
+		}
+	}
+	return s // return as-is if no layout matches
 }
 
 func nullIfEmpty(s string) *string {

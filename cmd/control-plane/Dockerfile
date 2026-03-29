@@ -18,8 +18,14 @@ FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /control-plane /control-plane
+WORKDIR /app
+
+COPY --from=builder /control-plane /app/control-plane
+
+# Pre-compiled dashboard assets. Built via: make dashboard
+# DASHBOARD_DIR defaults to dashboard/static relative to the working directory.
+COPY dashboard/static/ /app/dashboard/static/
 
 EXPOSE 8080
 
-ENTRYPOINT ["/control-plane"]
+ENTRYPOINT ["/app/control-plane"]

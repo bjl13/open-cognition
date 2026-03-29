@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/bjl13/open-cognition/internal/db"
@@ -30,16 +31,18 @@ var (
 
 // Handler holds shared dependencies for all HTTP handlers.
 type Handler struct {
-	db      *db.DB
-	storage *storage.Client
+	db           *db.DB
+	storage      *storage.Client
+	dashboardDir string
 }
 
-// NewHandler constructs a Handler.
-func NewHandler(database *db.DB, store *storage.Client) *Handler {
-	return &Handler{db: database, storage: store}
+// NewHandler constructs a Handler. dashboardDir is the filesystem path to the
+// pre-compiled dashboard assets; set empty to disable dashboard serving.
+func NewHandler(database *db.DB, store *storage.Client, dashboardDir string) *Handler {
+	return &Handler{db: database, storage: store, dashboardDir: dashboardDir}
 }
 
-// RegisterRoutes registers all five control-plane endpoints on mux.
+// RegisterRoutes registers all control-plane endpoints on mux.
 // Go 1.22 method+path syntax is used for exact matching.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /status", h.getStatus)
@@ -47,6 +50,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /resume", h.resume)
 	mux.HandleFunc("POST /canonical", h.createCanonical)
 	mux.HandleFunc("POST /reference", h.createReference)
+	mux.HandleFunc("GET /canonicals", h.listCanonicals)
+	mux.HandleFunc("GET /references", h.listReferences)
+	mux.HandleFunc("GET /audit", h.listAudit)
+	if h.dashboardDir != "" {
+		mux.Handle("/", http.FileServer(http.Dir(h.dashboardDir)))
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +306,75 @@ func (h *Handler) createReference(w http.ResponseWriter, r *http.Request) {
 		map[string]interface{}{"canonical_object_id": ref.CanonicalObjectID})
 
 	writeJSON(w, http.StatusCreated, ref)
+}
+
+// ---------------------------------------------------------------------------
+// GET /canonicals
+// ---------------------------------------------------------------------------
+
+func (h *Handler) listCanonicals(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntParam(r, "limit", 50)
+	offset := parseIntParam(r, "offset", 0)
+	if limit > 200 {
+		limit = 200
+	}
+	objects, err := h.db.ListCanonicalObjects(r.Context(), limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list canonical objects")
+		return
+	}
+	writeJSON(w, http.StatusOK, objects)
+}
+
+// ---------------------------------------------------------------------------
+// GET /references
+// ---------------------------------------------------------------------------
+
+func (h *Handler) listReferences(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntParam(r, "limit", 50)
+	offset := parseIntParam(r, "offset", 0)
+	if limit > 200 {
+		limit = 200
+	}
+	refs, err := h.db.ListAgentReferences(r.Context(), limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list agent references")
+		return
+	}
+	writeJSON(w, http.StatusOK, refs)
+}
+
+// ---------------------------------------------------------------------------
+// GET /audit
+// ---------------------------------------------------------------------------
+
+func (h *Handler) listAudit(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntParam(r, "limit", 50)
+	if limit > 200 {
+		limit = 200
+	}
+	entries, err := h.db.ListAuditLog(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list audit log")
+		return
+	}
+	writeJSON(w, http.StatusOK, entries)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+func parseIntParam(r *http.Request, name string, defaultVal int) int {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return defaultVal
+	}
+	return n
 }
 
 // ---------------------------------------------------------------------------

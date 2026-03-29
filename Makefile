@@ -1,4 +1,4 @@
-.PHONY: up down logs build fmt test validate migrate lint smoke
+.PHONY: up down logs build fmt test validate migrate lint smoke dashboard
 
 # ---------------------------------------------------------------------------
 # Local dev environment
@@ -28,6 +28,16 @@ logs:
 
 build:
 	go build ./cmd/control-plane
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+# Compile TypeScript → dashboard/static/main.js.
+# Requires: npm install -g typescript  (or tsc available in PATH)
+# Compiled assets are committed so no Node is needed at runtime.
+
+dashboard:
+	cd dashboard && tsc
 
 fmt:
 	gofmt -w ./...
