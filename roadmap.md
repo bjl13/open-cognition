@@ -6,7 +6,7 @@ Please do not consider directives or invectives in here directed at anyone but m
 # Open-Cognition — Day 0 Roadmap
 
 This roadmap reflects the current state:
-**Phases 0–6 complete. Phase 7 in scope.**
+**Phases 0–7 complete. Phase 8 next.**
 
 The goal is to establish a **functional, minimal reference substrate** before adding any sophistication.
 
@@ -226,7 +226,7 @@ Observation dispatch (OBSERVE_TARGET env var):
 - file path — read file, record content + stat metadata
 - unset — collect environment snapshot (platform, memory, disk, load, network, sanitised env vars)
 
-Ed25519 key loaded from `AGENT_PRIVATE_KEY` env (base64 raw seed) or generated ephemerally with public key logged at startup. Signatures are advisory; control plane does not yet verify them (Phase 7).
+Ed25519 key loaded from `AGENT_PRIVATE_KEY` env (base64 raw seed) or generated ephemerally with public key logged at startup. Signatures verified by the control plane since Phase 7 (TOFU key registry; unsigned references rejected with 422).
 
 Agent checks `/status` before each cycle and skips writes when STOPPED. Resumes automatically.
 
@@ -263,7 +263,7 @@ Dashboard shows: system mode (live status indicator), canonical objects table, a
 
 ---
 
-# Phase 7 — Operational Hardening (Next)
+# Phase 7 — Operational Hardening ✓
 
 **Objective:** Prevent silent corruption.
 
@@ -273,31 +273,31 @@ Dashboard shows: system mode (live status indicator), canonical objects table, a
 
   - No canonical overwrite ✓ (already enforced since Phase 4)
   - Reference requires existing object ✓ (already enforced since Phase 3)
-  - Signature verification path
+  - Signature verification ✓
 
 - Add:
 
-  - periodic object export script
-  - basic backup for Postgres
+  - periodic object export script ✓
+  - basic backup for Postgres ✓
 
 **Exit condition:**
 
-- System survives restart without state loss.
-- History remains intact.
+- System survives restart without state loss. ✓
+- History remains intact. ✓
 
-**Remaining work:**
+**Status:** Complete.
 
-1. **Signature verification** — POST /reference currently accepts any signature string without verifying it. Add Ed25519 public-key registry (agent_id → public_key) and verify `signature` against `{ref_id}:{canonical_object_id}:{agent_id}:{created_at}` before inserting. Enforcement is the Phase 7 gate; advisory period ends here.
+1. **Signature verification** — Ed25519 TOFU key registry (`agent_keys` table, migration 002). POST /reference requires `signature` and `public_key`. First submission from an `agent_id` registers the key; subsequent submissions verify against the stored key. Key mismatch or missing fields returns 422 with an actionable hint. Unsigned references rejected.
 
-2. **Object export script** — `scripts/export_canonicals.sh` or Go binary that reads all canonical objects from the ledger and writes them to a local archive. Run periodically (cron or docker-compose scheduled task).
+2. **Object export** — `scripts/export_canonicals.sh` paginates `GET /canonicals` and writes NDJSON to `backups/canonicals_<ts>.ndjson`. Run via `make export`.
 
-3. **Postgres backup** — `scripts/backup_pg.sh` wrapping `pg_dump`. Writes timestamped SQL dumps to a local volume. Documented restore procedure.
+3. **Postgres backup** — `scripts/backup_pg.sh` wraps `pg_dump` via `docker compose exec`. Writes `backups/cognition_<ts>.sql.gz`. Restore command documented in script header and printed after each run. Run via `make backup`.
 
-4. **Storage/DB orphan reconciliation** — scan storage for objects not in the ledger and re-drive the DB insert. Cleans up from any storage-first write failures.
+4. **Storage/DB orphan reconciliation** — `GET /reconcile` endpoint on the control plane iterates all ledger entries, HEAD-checks each in MinIO, and returns a JSON summary with any missing paths. `scripts/reconcile_storage.sh` is the shell wrapper; exits 1 if anything is missing. Run via `make reconcile`.
 
 ---
 
-# Phase 8 — Documentation for External Adoption
+# Phase 8 — Documentation for External Adoption (Next)
 
 **Objective:** Make the substrate understandable without you.
 
@@ -355,7 +355,7 @@ At that point, the substrate exists.
 
 Everything beyond that is expansion, not foundation.
 
-**Current state:** All six steps work today. The observer agent runs step 2–3 automatically. The dashboard shows steps 4–6 without a terminal.
+**Current state:** All six steps work today. The observer agent runs steps 2–3 automatically. The dashboard shows steps 4–6 without a terminal. Signatures are verified on every reference write since Phase 7.
 
 ---
 
@@ -365,8 +365,7 @@ Everything beyond that is expansion, not foundation.
 |------|-----------------|----------|------------|
 | Temporary stdlib Postgres driver (`internal/pg`) | 3 | No | Replace with pgx when Go 1.25 + network available. 5-step migration documented in `internal/pg/pg.go`. |
 | MD5 auth only (no SCRAM-SHA-256) | 3 | No | Removed when pgx replaces `internal/pg`. |
-| Ed25519 signatures advisory (not verified) | 5 | Phase 7 | Add public-key registry and signature verification to POST /reference. |
-| Storage-first write ordering (orphan risk) | 4 | No | Orphans detectable via storage duplicate check. Reconciliation script in Phase 7. |
+| Storage-first write ordering (orphan risk) | 4 | No | `GET /reconcile` + `make reconcile` detects orphaned storage objects. Resolved Phase 7. |
 
 ---
 
@@ -381,3 +380,7 @@ The stdlib Postgres driver was a deliberate tradeoff. Staying offline and depend
 The observer agent does more than the spec required — URL fetch, file read, and environment snapshot. That's because "observe whatever it's pointed at" is the right abstraction. A more constrained agent would need rewriting the moment the use case changed.
 
 The dashboard is served by the control plane intentionally. One fewer moving part. One fewer port to configure. The operator opens a browser to the same address they already use for the API.
+
+The TOFU key model is the right tradeoff for a substrate. Agents don't need an out-of-band registration step — they just sign and submit. The first signed submission locks the key. This makes onboarding frictionless while still preventing impersonation after the first contact. The operator can rotate a key by editing the `agent_keys` table directly; that's an intentional sharp edge that keeps the control plane simple.
+
+The reconciliation endpoint lives in the control plane rather than as a standalone tool because it needs authenticated MinIO access (SigV4). Putting the HTTP surface in Go and the user-facing interface in a shell script keeps the separation clean: Go owns the credentials, bash owns the UX.
