@@ -1,12 +1,12 @@
 <svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
   <!-- Outer ring: Slow, steady rotation -->
-  <circle cx="60" cy="60" r="45" stroke="#CDA433" stroke-width="3" fill="none" stroke-dasharray="15, 10">
+  <circle cx="60" cy="60" r="45" stroke="#CDA433" stroke-width="2.25" fill="none" stroke-dasharray="15, 10">
     <animateTransform 
       attributeName="transform" 
       type="rotate" 
       from="0 60 60" 
       to="360 60 60" 
-      dur="20s" 
+      dur="15s" 
       repeatCount="indefinite" />
   </circle>
 
@@ -14,7 +14,7 @@
   <circle cx="60" cy="60" r="6" fill="#6EC8C2">
     <animate 
       attributeName="r" 
-      values="6;7;6" 
+      values="6;9;6" 
       dur="3s" 
       repeatCount="indefinite" />
   </circle>
@@ -35,8 +35,8 @@
     
     <animate 
       attributeName="opacity" 
-      values="1;0.6;1" 
-      dur="4s" 
+      values="1;0.25;1" 
+      dur="3s" 
       repeatCount="indefinite" />
   </g>
 </svg>
