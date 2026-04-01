@@ -37,17 +37,6 @@ type CreateCanonicalRequest struct {
 	Payload []byte `json:"payload"` // required; base64-encoded raw bytes
 }
 
-// AuditEntry is one row from the append-only audit_log table.
-type AuditEntry struct {
-	ID         int64                  `json:"id"`
-	OccurredAt string                 `json:"occurred_at"`
-	Actor      string                 `json:"actor"`
-	Action     string                 `json:"action"`
-	TargetID   string                 `json:"target_id,omitempty"`
-	TargetType string                 `json:"target_type,omitempty"`
-	Detail     map[string]interface{} `json:"detail,omitempty"`
-}
-
 // AgentReference is the meaning layer: an agent-scoped pointer to a
 // canonical object. All fields mirror agent_reference.schema.json.
 type AgentReference struct {
