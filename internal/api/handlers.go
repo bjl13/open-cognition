@@ -55,6 +55,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /canonicals", h.listCanonicals)
 	mux.HandleFunc("GET /references", h.listReferences)
 	mux.HandleFunc("GET /audit", h.listAudit)
+	mux.HandleFunc("GET /reconcile", h.reconcileStorage)
 	if h.dashboardDir != "" {
 		mux.Handle("/", http.FileServer(http.Dir(h.dashboardDir)))
 	}
@@ -413,6 +414,65 @@ func (h *Handler) listAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, entries)
+}
+
+// ---------------------------------------------------------------------------
+// GET /reconcile
+// ---------------------------------------------------------------------------
+//
+// Read-only storage health check. Paginates all canonical objects from the
+// ledger and verifies each exists in object storage. Returns a summary of
+// mismatches (objects in DB whose storage path returns 404). Running this
+// after any partial write failure surfaces storage-first orphans that need
+// operator attention.
+
+func (h *Handler) reconcileStorage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	type miss struct {
+		ID          string `json:"id"`
+		StoragePath string `json:"storage_path"`
+	}
+
+	var (
+		checked int
+		missing []miss
+	)
+
+	const pageSize = 100
+	for offset := 0; ; offset += pageSize {
+		page, err := h.db.ListCanonicalObjects(ctx, pageSize, offset)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list canonical objects")
+			return
+		}
+		if len(page) == 0 {
+			break
+		}
+		for _, obj := range page {
+			checked++
+			exists, err := h.storage.ObjectExists(ctx, obj.StoragePath)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError,
+					"storage check failed for "+obj.ID+": "+err.Error())
+				return
+			}
+			if !exists {
+				missing = append(missing, miss{ID: obj.ID, StoragePath: obj.StoragePath})
+			}
+		}
+	}
+
+	if missing == nil {
+		missing = []miss{} // serialise as [] not null
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"checked":            checked,
+		"ok":                 checked - len(missing),
+		"missing_in_storage": missing,
+		"checked_at":         time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // ---------------------------------------------------------------------------
