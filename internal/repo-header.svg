@@ -1,20 +1,42 @@
-<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-  <!-- Outer ring (ledger) -->
-  <circle cx="60" cy="60" r="45" stroke="#CDA433" stroke-width="3" fill="none"/>
+svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer ring: Slow, steady rotation -->
+  <circle cx="60" cy="60" r="45" stroke="#CDA433" stroke-width="3" fill="none" stroke-dasharray="15, 10">
+    <animateTransform 
+      attributeName="transform" 
+      type="rotate" 
+      from="0 60 60" 
+      to="360 60 60" 
+      dur="20s" 
+      repeatCount="indefinite" />
+  </circle>
 
-  <!-- Core object -->
-  <circle cx="60" cy="60" r="6" fill="#6EC8C2"/>
+  <!-- Core object: Gentle pulsing -->
+  <circle cx="60" cy="60" r="6" fill="#6EC8C2">
+    <animate 
+      attributeName="r" 
+      values="6;7;6" 
+      dur="3s" 
+      repeatCount="indefinite" />
+  </circle>
 
-  <!-- References -->
-  <line x1="60" y1="60" x2="30" y2="40" stroke="#BDAECD" stroke-width="2"/>
-  <circle cx="30" cy="40" r="4" fill="#BDAECD"/>
+  <!-- References: Grouped for a slight sway/pulse effect -->
+  <g stroke="#BDAECD" stroke-width="2">
+    <line x1="60" y1="60" x2="30" y2="40" />
+    <circle cx="30" cy="40" r="4" fill="#BDAECD" />
 
-  <line x1="60" y1="60" x2="90" y2="35" stroke="#BDAECD" stroke-width="2"/>
-  <circle cx="90" cy="35" r="4" fill="#BDAECD"/>
+    <line x1="60" y1="60" x2="90" y2="35" />
+    <circle cx="90" cy="35" r="4" fill="#BDAECD" />
 
-  <line x1="60" y1="60" x2="95" y2="75" stroke="#BDAECD" stroke-width="2"/>
-  <circle cx="95" cy="75" r="4" fill="#BDAECD"/>
+    <line x1="60" y1="60" x2="95" y2="75" />
+    <circle cx="95" cy="75" r="4" fill="#BDAECD" />
 
-  <line x1="60" y1="60" x2="35" y2="85" stroke="#BDAECD" stroke-width="2"/>
-  <circle cx="35" cy="85" r="4" fill="#BDAECD"/>
+    <line x1="60" y1="60" x2="35" y2="85" />
+    <circle cx="35" cy="85" r="4" fill="#BDAECD" />
+    
+    <animate 
+      attributeName="opacity" 
+      values="1;0.6;1" 
+      dur="4s" 
+      repeatCount="indefinite" />
+  </g>
 </svg>
