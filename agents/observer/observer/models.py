@@ -118,6 +118,7 @@ class AgentReference:
     trust_weight: float | None = None
     time_horizon: str | None = None
     signature: str | None = None
+    public_key: str | None = None
     metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -137,6 +138,8 @@ class AgentReference:
             d["time_horizon"] = self.time_horizon
         if self.signature is not None:
             d["signature"] = self.signature
+        if self.public_key is not None:
+            d["public_key"] = self.public_key
         if self.metadata:
             d["metadata"] = self.metadata
         return d

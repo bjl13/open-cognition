@@ -1,7 +1,9 @@
 package api
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -70,6 +72,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func writeHint(w http.ResponseWriter, status int, msg, hint string) {
+	writeJSON(w, status, map[string]string{"error": msg, "hint": hint})
 }
 
 // actorFromRequest reads the actor identity from the X-Actor request header.
@@ -294,6 +300,54 @@ func (h *Handler) createReference(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		writeError(w, http.StatusUnprocessableEntity,
 			fmt.Sprintf("canonical_object_id %q does not exist in ledger", ref.CanonicalObjectID))
+		return
+	}
+
+	// --- Signature verification ---
+
+	const sigHint = "sign the string '{id}:{canonical_object_id}:{agent_id}:{created_at}' " +
+		"with your Ed25519 key and include 'signature' (base64 64-byte sig) and " +
+		"'public_key' (base64 raw 32-byte key) in the request"
+
+	if ref.Signature == "" {
+		writeHint(w, http.StatusUnprocessableEntity, "signature is required", sigHint)
+		return
+	}
+	if ref.PublicKey == "" {
+		writeHint(w, http.StatusUnprocessableEntity, "public_key is required", sigHint)
+		return
+	}
+
+	pubKeyBytes, err := base64.StdEncoding.DecodeString(ref.PublicKey)
+	if err != nil || len(pubKeyBytes) != ed25519.PublicKeySize {
+		writeHint(w, http.StatusUnprocessableEntity,
+			"public_key must be a base64-encoded 32-byte Ed25519 public key", sigHint)
+		return
+	}
+
+	sigBytes, err := base64.StdEncoding.DecodeString(ref.Signature)
+	if err != nil || len(sigBytes) != ed25519.SignatureSize {
+		writeHint(w, http.StatusUnprocessableEntity,
+			"signature must be a base64-encoded 64-byte Ed25519 signature", sigHint)
+		return
+	}
+
+	message := []byte(ref.ID + ":" + ref.CanonicalObjectID + ":" + ref.AgentID + ":" + ref.CreatedAt)
+	if !ed25519.Verify(ed25519.PublicKey(pubKeyBytes), message, sigBytes) {
+		writeError(w, http.StatusUnprocessableEntity, "signature verification failed")
+		return
+	}
+
+	storedKey, _, err := h.db.LookupOrRegisterAgentKey(r.Context(), ref.AgentID, ref.PublicKey, ref.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to register agent key")
+		return
+	}
+	if storedKey != ref.PublicKey {
+		writeHint(w, http.StatusUnprocessableEntity,
+			"public key mismatch",
+			fmt.Sprintf("agent %q is already registered with a different public key; "+
+				"resubmit with the original key or ask the operator to update agent_keys", ref.AgentID))
 		return
 	}
 

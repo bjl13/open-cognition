@@ -1,4 +1,4 @@
-.PHONY: up down logs build fmt test validate migrate lint smoke dashboard
+.PHONY: up down logs build fmt test validate migrate lint smoke dashboard export backup reconcile
 
 # ---------------------------------------------------------------------------
 # Local dev environment
@@ -51,10 +51,12 @@ test: validate lint
 # Database
 # ---------------------------------------------------------------------------
 
-# Apply the initial migration. Idempotent only if tables don't exist yet;
-# re-running against a migrated DB will error on duplicate object creation.
+# Apply all migrations in order.
+# 001: core tables (not idempotent — do not re-run against a migrated DB)
+# 002: agent_keys (idempotent — uses CREATE TABLE IF NOT EXISTS)
 migrate:
 	docker compose exec -T postgres psql -U cognition -d cognition -f /dev/stdin < migrations/001_initial.sql
+	docker compose exec -T postgres psql -U cognition -d cognition -f /dev/stdin < migrations/002_agent_keys.sql
 
 # ---------------------------------------------------------------------------
 # Schema validation
