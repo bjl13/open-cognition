@@ -1,6 +1,6 @@
 <p align="center">
   <a href=".">
-    <img src="internal/repo-header.svg" alt="Open-Cognition Logo" width="140"/>
+    <img src="internal/repo-header.svg?v=20263103191500R" alt="Open-Cognition Logo" width="175"/>
   </a>
 </p>
 
