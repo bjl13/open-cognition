@@ -50,5 +50,6 @@ type AgentReference struct {
 	TrustWeight       *float64               `json:"trust_weight,omitempty"`
 	TimeHorizon       string                 `json:"time_horizon,omitempty"`
 	Signature         string                 `json:"signature,omitempty"`
+	PublicKey         string                 `json:"public_key,omitempty"`
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
 }

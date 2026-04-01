@@ -157,6 +157,7 @@ async def _run_cycle(client: ControlPlaneClient, cfg: Config) -> None:
         relevance=1.0,
         trust_weight=1.0,
         signature=signature,
+        public_key=public_key_b64(),
         metadata={"observer_public_key": public_key_b64()},
     )
 

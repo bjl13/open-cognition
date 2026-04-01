@@ -182,6 +182,47 @@ func (d *DB) WriteAuditLog(ctx context.Context, actor, action, targetID, targetT
 	return nil
 }
 
+// LookupOrRegisterAgentKey implements trust-on-first-use (TOFU) key registration.
+//
+// If no key exists for agentID, inserts pubKeyB64 with firstRefID and returns the
+// submitted key as storedKey with isNew=true.
+//
+// If a key already exists, returns the stored key with isNew=false. The caller
+// compares storedKey == submittedKey to detect key mismatch.
+//
+// An audit log entry with action "register_key" is written when isNew is true.
+func (d *DB) LookupOrRegisterAgentKey(ctx context.Context, agentID, pubKeyB64, firstRefID string) (storedKey string, isNew bool, err error) {
+	insertSQL := fmt.Sprintf(
+		`INSERT INTO agent_keys (agent_id, public_key, first_ref_id) VALUES (%s, %s, %s)`,
+		pg.QuoteLiteral(agentID),
+		pg.QuoteLiteral(pubKeyB64),
+		pg.QuoteLiteral(firstRefID),
+	)
+	insertErr := d.pool.Exec(ctx, insertSQL)
+	if insertErr == nil {
+		// Newly registered.
+		_ = d.WriteAuditLog(ctx, agentID, "register_key", firstRefID, "agent_keys",
+			map[string]interface{}{"public_key": pubKeyB64})
+		return pubKeyB64, true, nil
+	}
+
+	// If it's not a unique-constraint violation, surface the error.
+	if !strings.Contains(insertErr.Error(), "duplicate key") {
+		return "", false, fmt.Errorf("db: register agent key: %w", insertErr)
+	}
+
+	// Key already registered — read it back.
+	selectSQL := fmt.Sprintf(
+		`SELECT public_key FROM agent_keys WHERE agent_id = %s`,
+		pg.QuoteLiteral(agentID),
+	)
+	var stored string
+	if err := d.pool.QueryRow(ctx, selectSQL, &stored); err != nil {
+		return "", false, fmt.Errorf("db: lookup agent key: %w", err)
+	}
+	return stored, false, nil
+}
+
 // ListCanonicalObjects returns up to limit canonical objects ordered newest first.
 func (d *DB) ListCanonicalObjects(ctx context.Context, limit, offset int) ([]models.CanonicalObject, error) {
 	sql := fmt.Sprintf(

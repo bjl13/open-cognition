@@ -41,10 +41,12 @@ test: validate lint
 # Database
 # ---------------------------------------------------------------------------
 
-# Apply the initial migration. Idempotent only if tables don't exist yet;
-# re-running against a migrated DB will error on duplicate object creation.
+# Apply all migrations in order.
+# 001: core tables (not idempotent — do not re-run against a migrated DB)
+# 002: agent_keys (idempotent — uses CREATE TABLE IF NOT EXISTS)
 migrate:
 	docker compose exec -T postgres psql -U cognition -d cognition -f /dev/stdin < migrations/001_initial.sql
+	docker compose exec -T postgres psql -U cognition -d cognition -f /dev/stdin < migrations/002_agent_keys.sql
 
 # ---------------------------------------------------------------------------
 # Schema validation
@@ -63,3 +65,22 @@ PAYLOAD ?= {"smoke":"test","ts":"$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"}
 
 smoke:
 	@./scripts/smoke_test.sh "$(PAYLOAD)"
+
+# ---------------------------------------------------------------------------
+# Operations (require: make up && make migrate, control plane running)
+# ---------------------------------------------------------------------------
+
+# Export all canonical objects from the ledger to backups/canonicals_<ts>.ndjson
+# NDJSON: one JSON object per line. Includes storage_path for payload retrieval.
+export:
+	@./scripts/export_canonicals.sh
+
+# Dump Postgres to backups/cognition_<ts>.sql.gz via pg_dump.
+# Restore: gunzip -c <file> | docker compose exec -T postgres psql -U cognition -d cognition
+backup:
+	@./scripts/backup_pg.sh
+
+# Verify every ledger-recorded canonical object exists in object storage.
+# Exit 1 if any storage paths return 404.
+reconcile:
+	@./scripts/reconcile_storage.sh
