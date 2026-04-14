@@ -6,13 +6,38 @@
 
 <h1 align="center">Open-Cognition</h1>
 
-
-
 Open-Cognition is a reference substrate for governed shared memory between autonomous and human-directed agents.
 
 It separates **immutable canonical objects** (facts) from **agent-scoped references** (meaning), and provides a minimal control layer for _attribution_, _auditability_, and a safe _system halt_.
 
 This repository defines a **reference architecture**, not a product.
+
+---
+
+## 📋 Contents
+
+- [🧭 Purpose](#-purpose)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+  - [What this is not](#what-this-is-not)
+- [🚀 Quick Start](#-quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Run](#run)
+  - [Verify](#verify)
+  - [Local Development](#local-development)
+- [📦 Repository Structure](#-repository-structure)
+- [🧱 Core Concepts](#-core-concepts)
+  - [Canonical Objects (Fact Layer)](#canonical-objects-fact-layer)
+  - [Agent References (Meaning Layer)](#agent-references-meaning-layer)
+  - [Event Ledger](#event-ledger)
+  - [System Lifecycle](#system-lifecycle)
+- [🧠 Mental Model](#-mental-model)
+- [🏗️ Architecture Overview](#️-architecture-overview)
+- [⚙️ Example Use Case](#️-example-use-case)
+- [🛡️ Governance Model](#️-governance-model)
+- [⚜️ Design Principles](#️-design-principles)
+- [🗺️ Roadmap](#️-roadmap)
+- [📜 License](#-license)
 
 ---
 
@@ -32,7 +57,7 @@ Modern AI systems can write to shared state without leaving a reliable trail of:
 - what changed  
 - when it changed  
 - under whose authority
-  
+
 ### The Solution
 Open-Cognition addresses this by defining a minimal, reproducible substrate with:
 
@@ -59,6 +84,83 @@ It is a **base layer substrate for recording and attributing changes to a system
 
 ---
 
+## 🚀 Quick Start
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-started/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+### Run
+
+```bash
+git clone https://github.com/bjl13/open-cognition
+cd open-cognition
+make up       # starts Postgres, MinIO, and the control plane
+make migrate  # applies the database schema
+```
+
+After startup:
+
+| Service | Address |
+|---|---|
+| Control Plane + Dashboard | `http://localhost:8080` |
+| MinIO Console | `http://localhost:9001` (minioadmin / minioadmin) |
+| MinIO API | `http://localhost:9000` |
+| Postgres | `localhost:5432` |
+
+### Verify
+
+```bash
+make smoke    # full round-trip: create object → verify storage → test immutability
+```
+
+`make smoke` creates a canonical object, verifies the returned ID matches the SHA-256 of the submitted payload, and confirms duplicate rejection (409). Exit 0 means the substrate is working.
+
+From the dashboard at `http://localhost:8080` you can inspect system mode, canonical objects, agent references, and the audit log in real time.
+
+### Local Development
+
+To build and run the control plane outside Docker:
+
+```bash
+cp .env.example .env   # set CONTROL_API_KEY and storage credentials
+make build             # compiles ./control-plane
+./control-plane
+```
+
+Other useful targets:
+
+```bash
+make logs       # tail all service logs
+make down       # stop all services
+make validate   # validate schemas against example files
+make export     # export canonical objects to backups/ (NDJSON)
+make backup     # dump Postgres to backups/ (gzip SQL)
+make reconcile  # verify every ledger object exists in storage
+```
+
+---
+
+## 📦 Repository Structure
+
+```
+open-cognition/
+│
+├── schemas/        # Canonical object, reference, and policy schemas
+├── examples/       # Minimal example records
+├── cmd/            # Control plane entrypoint (Go)
+├── internal/       # API, DB, models, lifecycle
+├── agents/         # Sample agent implementations
+├── dashboard/      # Compiled static UI
+├── migrations/     # Database schema
+├── scripts/        # Operational scripts (smoke test, backup, export, reconcile)
+├── docs/           # Architecture and governance notes
+└── roadmap.md      # Live development intent document (see Roadmap)
+```
+
+---
+
 ## 🧱 Core Concepts
 
 ### Canonical Objects (Fact Layer)
@@ -72,7 +174,7 @@ Properties:
 - never modified in place  
 - represent observations, documents, tool outputs, or policies  
 
-Canonical objects form the system’s **shared source of truth**.
+Canonical objects form the system's **shared source of truth**.
 
 ---
 
@@ -187,12 +289,10 @@ flowchart TB
     style A fill:#6EC8C2,stroke:#BDAECD
 ```
 
-
 Open-Cognition separates system memory into two layers:
 - Facts → immutable, content-addressed objects
 - Meaning → agent-specific references to those objects
 
-  
 ---
 
 ## 🏗️ Architecture Overview
@@ -212,6 +312,8 @@ Open-Cognition consists of four minimal components:
   Read canonical objects and emit signed references.
 
 An optional static dashboard provides read-only visibility into system state.
+
+→ See [`docs/architecture.md`](docs/architecture.md) for full component detail and local development notes, [`docs/architecture-diagram.md`](docs/architecture-diagram.md) for the component diagram, and [`docs/data-flow-diagram.md`](docs/data-flow-diagram.md) for the write-path sequences.
 
 ---
 
@@ -236,69 +338,29 @@ An agent analyzes a document:
 
 The object is immutable; disagreement is expressed through references, not mutation.
 
-
 No interpretation overwrites another and all perspectives remain attributable.
 
-Because objects are immutable and references are isolated, interacting agents cannot overwrite or compound each other’s errors.
+Because objects are immutable and references are isolated, interacting agents cannot overwrite or compound each other's errors.
 
 > [!TIP]
-> When agents can observe each other’s references, disagreement becomes visible—enabling comparison, correction, and potential convergence over time.
----
-
-## 🚀 Quick Start
-
-### Prerequisites (will be included in initial _make up_ if missing):
-
-- Docker  
-- Docker Compose  
-
-### Run
-
-```bash
-git clone https://github.com/bjl13/open-cognition
-cd open-cognition
-make up
-```
-
-After startup, you should be able to:
-
-- create a canonical object
-- attach an agent reference
-- view records in the dashboard
-- trigger a system stop
-
-
----
-
-## 📦 Repository Structure
-
-```
-		open-cognition/
-		│
-		├── schemas/        # Canonical object, reference, and policy schemas
-		├── examples/       # Minimal example records
-		├── cmd/            # Control plane entrypoint (Go)
-		├── internal/       # API, DB, models, lifecycle
-		├── agents/         # Sample agent implementations
-		├── dashboard/      # Compiled static UI
-		├── migrations/     # Database schema
-		└── docs/           # Architecture and governance notes
-```
+> When agents can observe each other's references, disagreement becomes visible—enabling comparison, correction, and potential convergence over time.
 
 ---
 
 ## 🛡️ Governance Model
 
 Open-Cognition enforces three key separations:
-	
-  1.	Fact vs Interpretation
-Canonical objects are immutable. References carry meaning.
 
-  2.	Actor vs System
-All mutations are attributable to specific agents or humans.
-	
-  3.	Execution vs Memory
-Agents compute locally but cannot directly mutate shared truth.
+1. **Fact vs Interpretation**  
+   Canonical objects are immutable. References carry meaning.
+
+2. **Actor vs System**  
+   All mutations are attributable to specific agents or humans.
+
+3. **Execution vs Memory**  
+   Agents compute locally but cannot directly mutate shared truth.
+
+→ See [`docs/governance-model.md`](docs/governance-model.md) for canonical object rules, reference requirements, policy objects, system halt behaviour, and audit log semantics. See [`docs/trust-model.md`](docs/trust-model.md) for the identity, signing, and TOFU-key details, [`docs/lifecycle.md`](docs/lifecycle.md) for system / object / reference lifecycles, and [`docs/threat-model.md`](docs/threat-model.md) for adversary assumptions and residual risks.
 
 ---
 
@@ -306,14 +368,24 @@ Agents compute locally but cannot directly mutate shared truth.
 
 - Immutable records over mutable state
 - Append-only history over silent edits
-- Attribution over aggregate “system” behavior
+- Attribution over aggregate "system" behavior
 - Portability across storage providers
 - Minimal runtime dependencies
 
 ---
 
-##  📜 License
+## 🗺️ Roadmap
 
-This project is licensed under the Mozilla Public License 2.0 (MPL-2.0).
+[`roadmap.md`](roadmap.md) is a live working document tracking development phases, current status, known technical debt, and design rationale. It is **not** a governance document — it reflects development intent and internal reasoning, not system contracts.
+
+It is intentionally surfaced here as a reference point for contributors and agentic coding tools. Reading it before working on the codebase will give you accurate context on what is complete, what is deferred, and why specific tradeoffs were made. It is the right place to look before proposing changes or extensions.
+
+**Current state:** Phases 0–8 complete. Phase 9 (v1.0 freeze readiness) is next — see [`docs/v1-readiness.md`](docs/v1-readiness.md).
+
+---
+
+## 📜 License
+
+This project is licensed under the [Mozilla Public License 2.0 (MPL-2.0)](https://www.mozilla.org/en-US/MPL/2.0/).
 
 The core substrate remains open while allowing independent extensions and commercial implementations.

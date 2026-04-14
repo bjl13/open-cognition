@@ -1,4 +1,4 @@
-.PHONY: up down logs build fmt test validate migrate lint smoke
+.PHONY: up down logs build fmt test validate migrate lint smoke dashboard export backup reconcile
 
 # ---------------------------------------------------------------------------
 # Local dev environment
@@ -14,7 +14,7 @@ up:
 	@echo "  Postgres:      localhost:5432"
 	@echo "  MinIO API:     http://localhost:9000"
 	@echo "  MinIO Console: http://localhost:9001  (minioadmin / minioadmin)"
-	@echo "  Control plane: http://localhost:8080  (after: make migrate && make build)"
+	@echo "  Control plane: http://localhost:8080  (started by compose; run 'make migrate' to apply the schema)"
 
 down:
 	docker compose down
@@ -28,6 +28,16 @@ logs:
 
 build:
 	go build ./cmd/control-plane
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+# Compile TypeScript → dashboard/static/main.js.
+# Requires: npm install -g typescript  (or tsc available in PATH)
+# Compiled assets are committed so no Node is needed at runtime.
+
+dashboard:
+	cd dashboard && tsc
 
 fmt:
 	gofmt -w ./...

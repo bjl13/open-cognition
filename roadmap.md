@@ -6,7 +6,7 @@ Please do not consider directives or invectives in here directed at anyone but m
 # Open-Cognition — Day 0 Roadmap
 
 This roadmap reflects the current state:
-**Phases 0–7 complete. Phase 8 next.**
+**Phases 0–8 complete. v1.0 freeze readiness is the next milestone.**
 
 The goal is to establish a **functional, minimal reference substrate** before adding any sophistication.
 
@@ -297,7 +297,7 @@ Dashboard shows: system mode (live status indicator), canonical objects table, a
 
 ---
 
-# Phase 8 — Documentation for External Adoption (Next)
+# Phase 8 — Documentation for External Adoption ✓
 
 **Objective:** Make the substrate understandable without you.
 
@@ -305,22 +305,63 @@ Dashboard shows: system mode (live status indicator), canonical objects table, a
 
 Write:
 
-- docs/trust-model.md
-- docs/lifecycle.md
-- docs/threat-model.md
+- `docs/trust-model.md` ✓
+- `docs/lifecycle.md` ✓
+- `docs/threat-model.md` ✓
 
 Add:
 
-- architecture diagram
-- data flow diagram
+- architecture diagram ✓ (`docs/architecture-diagram.md`)
+- data flow diagram ✓ (`docs/data-flow-diagram.md`)
+
+Plus (alignment pass):
+
+- Restored Phase 6/7 code lost in a merge regression (`d0e92df`): read
+  endpoints (`GET /canonicals`, `/references`, `/audit`, `/reconcile`),
+  dashboard serving at `/`, observer service in `docker-compose.yml`,
+  `AuditEntry` model, DB list methods, `make dashboard` target.
+- `.env.example` rewritten to match the `STORAGE_*` env vars the control
+  plane actually reads.
+- Makefile `make up` echo corrected (compose starts the control plane;
+  only `make migrate` is needed afterwards).
+- README restructured with table of contents, quick-start first, and
+  cross-links into `docs/`.
 
 **Exit condition:**
 
-- A new reader can understand the system by reading `/docs` + `/schemas`.
+- A new reader can understand the system by reading `/docs` + `/schemas`. ✓
+- README, roadmap, and repo are aligned; no claim in the docs is unbacked
+  by code on disk. ✓
 
 ---
 
-# Non-Goals (Until After Phase 8)
+# Phase 9 — v1.0 Freeze Readiness (Next)
+
+**Objective:** Close the last gaps between the roadmap's claims and a
+system someone else can deploy without your help.
+
+See [`docs/v1-readiness.md`](docs/v1-readiness.md) for the full checklist.
+Short list:
+
+- API key middleware on write endpoints (and optionally read endpoints).
+- Hash-chained or externally-shipped audit log.
+- `pgx` driver migration (retires the stdlib `internal/pg` driver and the
+  MD5-auth workaround).
+- `make install` / one-shot deployable binary; reproducible Docker image.
+- End-to-end CI that runs `up → migrate → smoke → reconcile`.
+- Schema v0.1.0 → 1.0.0 stabilisation.
+
+**Exit condition:**
+
+- A new operator can `git clone && make up && make migrate && make smoke`
+  from a cold cache and reach a signed green result without reading
+  issue tracker history.
+- `make reconcile` passes on a populated system.
+- Every write endpoint rejects unauthenticated calls.
+
+---
+
+# Non-Goals (Until After v1.0)
 
 Do **not** add yet:
 
@@ -366,6 +407,10 @@ Everything beyond that is expansion, not foundation.
 | Temporary stdlib Postgres driver (`internal/pg`) | 3 | No | Replace with pgx when Go 1.25 + network available. 5-step migration documented in `internal/pg/pg.go`. |
 | MD5 auth only (no SCRAM-SHA-256) | 3 | No | Removed when pgx replaces `internal/pg`. |
 | Storage-first write ordering (orphan risk) | 4 | No | `GET /reconcile` + `make reconcile` detects orphaned storage objects. Resolved Phase 7. |
+| `CONTROL_API_KEY` declared but not enforced by the router | 3 | Yes for v1.0 | Add auth middleware to write endpoints (and optionally read endpoints) before the v1.0 tag. |
+| Audit log is append-only by convention, not cryptographically chained | 2 | No | Hash-chaining or external log shipping deferred to Phase 9 / post-v1.0. |
+| Signatures cover identity fields only (`id:coid:agent_id:created_at`) | 7 | No | Extend to full-payload signing in a later schema bump. |
+| Merge `d0e92df` silently dropped Phase 6/7 work (restored in Phase 8) | 8 | No | Restored from `8f09a7b`; guard against recurrence via end-to-end CI in Phase 9. |
 
 ---
 
