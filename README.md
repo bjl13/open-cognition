@@ -134,6 +134,7 @@ Agents do not modify shared truth.
 They interpret it.
 
 ```mermaid
+
 ---
 config:
   elk:
@@ -143,6 +144,7 @@ config:
   theme: neo
   layout: dagre
 ---
+
 flowchart TB
  subgraph AP["Agentic Plane"]
     direction LR
@@ -271,16 +273,16 @@ After startup, you should be able to:
 ## 📦 Repository Structure
 
 ```
-open-cognition/
-│
-├── schemas/        # Canonical object, reference, and policy schemas
-├── examples/       # Minimal example records
-├── cmd/            # Control plane entrypoint (Go)
-├── internal/       # API, DB, models, lifecycle
-├── agents/         # Sample agent implementations
-├── dashboard/      # Compiled static UI
-├── migrations/     # Database schema
-└── docs/           # Architecture and governance notes
+		open-cognition/
+		│
+		├── schemas/        # Canonical object, reference, and policy schemas
+		├── examples/       # Minimal example records
+		├── cmd/            # Control plane entrypoint (Go)
+		├── internal/       # API, DB, models, lifecycle
+		├── agents/         # Sample agent implementations
+		├── dashboard/      # Compiled static UI
+		├── migrations/     # Database schema
+		└── docs/           # Architecture and governance notes
 ```
 
 ---
