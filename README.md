@@ -313,7 +313,7 @@ Open-Cognition consists of four minimal components:
 
 An optional static dashboard provides read-only visibility into system state.
 
-→ See [`docs/architecture.md`](docs/architecture.md) for full component detail, data flow, content-addressing mechanics, and local development notes.
+→ See [`docs/architecture.md`](docs/architecture.md) for full component detail and local development notes, [`docs/architecture-diagram.md`](docs/architecture-diagram.md) for the component diagram, and [`docs/data-flow-diagram.md`](docs/data-flow-diagram.md) for the write-path sequences.
 
 ---
 
@@ -360,7 +360,7 @@ Open-Cognition enforces three key separations:
 3. **Execution vs Memory**  
    Agents compute locally but cannot directly mutate shared truth.
 
-→ See [`docs/governance-model.md`](docs/governance-model.md) for full detail on canonical object rules, reference requirements, the TOFU key model, policy objects, system halt behavior, and audit log semantics.
+→ See [`docs/governance-model.md`](docs/governance-model.md) for canonical object rules, reference requirements, policy objects, system halt behaviour, and audit log semantics. See [`docs/trust-model.md`](docs/trust-model.md) for the identity, signing, and TOFU-key details, [`docs/lifecycle.md`](docs/lifecycle.md) for system / object / reference lifecycles, and [`docs/threat-model.md`](docs/threat-model.md) for adversary assumptions and residual risks.
 
 ---
 
@@ -380,7 +380,7 @@ Open-Cognition enforces three key separations:
 
 It is intentionally surfaced here as a reference point for contributors and agentic coding tools. Reading it before working on the codebase will give you accurate context on what is complete, what is deferred, and why specific tradeoffs were made. It is the right place to look before proposing changes or extensions.
 
-**Current state:** Phases 0–7 complete. Phase 8 (documentation for external adoption) is next.
+**Current state:** Phases 0–8 complete. Phase 9 (v1.0 freeze readiness) is next — see [`docs/v1-readiness.md`](docs/v1-readiness.md).
 
 ---
 
